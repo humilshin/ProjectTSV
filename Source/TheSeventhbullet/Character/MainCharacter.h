@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Data/StatusTypes.h"
 #include "GameFramework/Character.h"
+#include "Save/ISaveableComponent.h"
 #include "MainCharacter.generated.h"
 
 
@@ -37,7 +38,7 @@ enum class EAnimState : uint8
 
 
 UCLASS()
-class THESEVENTHBULLET_API AMainCharacter : public ACharacter
+class THESEVENTHBULLET_API AMainCharacter : public ACharacter, public ISaveableComponent
 {
 	GENERATED_BODY()
 
@@ -303,6 +304,14 @@ public:
 	UFUNCTION()
 	void AddGold(int32 Amount);
 	void ResetGold();
+
+	// ISaveableComponent
+	virtual void SaveTo(USaveAndLoadGame* SaveData) const override;
+	virtual void LoadFrom(const USaveAndLoadGame* SaveData) override;
+	virtual FName GetSaveableId() const override { return FName("MainCharacter"); }
+
+protected:
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 private:
 	float CurrentHP = 0.f;
 	float CurrentStamina = 0.f;

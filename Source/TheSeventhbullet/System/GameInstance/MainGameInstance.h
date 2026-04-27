@@ -3,14 +3,15 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Data/SaveAndLoadGame.h"
 #include "Engine/GameInstance.h"
+#include "Save/ISaveableComponent.h"
 #include "MainGameInstance.generated.h"
 
 class ULevelSequencePlayer;
 class USaveGame;
 class UUIManager;
 class ULoadingScreenWidget;
+class USaveAndLoadGame;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /* [MainGameInstance Guide]
@@ -20,21 +21,21 @@ class ULoadingScreenWidget;
  *
  * [역할]
  *   1. 게임 시작 흐름 관리 (NewGame / Continue)
- *   2. 세이브/로드 처리 (비동기 로드 + 동기 저장)
- *   3. 로딩 화면 표시 및 진행률 보간
- *   4. 메인 메뉴 복귀 처리
+ *   2. 로딩 화면 표시 및 진행률 보간
+ *   3. 메인 메뉴 복귀 처리
+ *   4. 날짜/통계 캡슐화 (ISaveableComponent 구현 → SaveManager에 위임)
  *
  * [게임 시작 흐름]
  *   MainMenu 표시 (MainGameMode::BeginPlay)
  *     └─ NewGame 클릭 → StartNewGame()
- *          └─ bIsDataLoaded = true (세이브 로드 건너뜀) + GameStartMapLoad()
- *     └─ Continue 클릭 → LoadAsyncSaveData() + GameStartMapLoad()
- *          └─ 세이브 로드 + 맵 스트리밍 병렬 실행
- *     └─ 둘 다 완료 → CheckAndStartGame() → 보간 100% 도달 → StartGamePlay()
+ *          └─ bPollDataReady = true (저장 로드 건너뜀) + GameStartMapLoad()
+ *     └─ Continue 클릭 → SaveManager::RequestLoad() + GameStartMapLoad()
+ *          └─ 데이터 로드 + 맵 스트리밍 병렬 실행
+ *     └─ 둘 다 완료 → SaveManager::TryApplyLoadedData() → 보간 100% 도달 → StartGamePlay()
  *
  * [메인 메뉴 복귀]
  *   ReturnToMainMenu()
- *     └─ 세이브 저장 → 일시정지 해제 → GameMode에 리셋 위임
+ *     └─ SaveManager::RequestSave(ReturnToMenu, 콜백) → 일시정지 해제 → GameMode에 리셋 위임
  *
  * [사용 예시]
  *   UMainGameInstance* GI = UMainGameInstance::Get(this);
@@ -42,8 +43,8 @@ class ULoadingScreenWidget;
  *   // 새 게임 시작
  *   GI->StartNewGame();
  *
- *   // 이어하기
- *   GI->LoadAsyncSaveData();
+ *   // 이어하기 (MainMenuWidget에서)
+ *   USaveManager::Get(this)->RequestLoad();
  *   GI->GameStartMapLoad();
  *
  *   // 메인 메뉴로 복귀
@@ -55,33 +56,52 @@ class ULoadingScreenWidget;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 UCLASS()
-class THESEVENTHBULLET_API UMainGameInstance : public UGameInstance
+class THESEVENTHBULLET_API UMainGameInstance : public UGameInstance, public ISaveableComponent
 {
 	GENERATED_BODY()
 public:
 	static UMainGameInstance* Get(const UObject* WorldContext);
-	int32 CurrentDay = 1;//현재 날짜
-	int32 TotalRequestAttack = 0;//게임에서 총 공격한 횟수
-	int32 TotalRequestHit = 0;//게임에서 총 공격 당한 횟수
-	void SaveGameData();
-	void LoadAsyncSaveData();
+
+	virtual void OnStart() override;
+
 	void GameStartMapLoad();
 	void StartNewGame();
 	void ReturnToMainMenu();
 
 	bool DoesSaveExist() const;
-	
+
 	void ResetGameData();
+
+	/** 현재 날짜 접근자 */
+	int32 GetCurrentDay() const { return CurrentDay; }
+
+	/** 하루 전진 (침대 저장 시 호출) */
+	void AdvanceDay() { CurrentDay++; }
+
+	/** 공격 횟수 증가 */
+	void AddAttackCount() { TotalRequestAttack++; }
+
+	/** 피격 횟수 증가 */
+	void AddHitCount() { TotalRequestHit++; }
+
+	// ISaveableComponent
+	virtual void SaveTo(USaveAndLoadGame* SaveData) const override;
+	virtual void LoadFrom(const USaveAndLoadGame* SaveData) override;
+	virtual FName GetSaveableId() const override { return FName("GameInstance"); }
+
+	/** GameInstance를 SaveManager에 등록. OnStart()에서 호출. */
+	void RegisterToSaveManager();
+
+	/** SaveManager::OnLoadApplied 콜백 수신 → 로딩 진행률 폴링 플래그 설정 */
+	void NotifySaveManagerLoadApplied(bool bSuccess);
 	
 	//Town에서 보스 의뢰 수락 시 호출
 	//현석 : 블루프린트 테스트용으로 추가
 	UFUNCTION(BlueprintCallable)
 	void RequestBossStage(int32 InRequestID);
 private:
-	void OnSaveDataLoadFinished(const FString& SlotName, const int32 UserIndex, USaveGame* LoadedGameData);
 	UFUNCTION()
 	void OnMapLoadFinished();
-	void CheckAndStartGame();
 
 	void ShowLoadingScreen();
 	void HideLoadingScreen();
@@ -98,23 +118,24 @@ private:
 	void OnBossSequenceFinished();//시퀀스 종료 델리게이트 수신
 
 private:
-	static const FString SaveSlotName;
 	static const FName StartLevelName;
 
-	bool bIsMapLoaded = false;
-	bool bIsDataLoaded = false;
+	/** 로딩 진행률 폴링용 플래그 (SaveManager와 독립적으로 로딩 UI만 제어) */
+	bool bPollDataReady = false;
+	bool bPollMapReady = false;
 
 	UPROPERTY()
 	TObjectPtr<ULoadingScreenWidget> CachedLoadingWidget;
 
 	FTimerHandle ProgressTimerHandle;
-	
-	// [T0.1] UPROPERTY 추가 — GC 수집 방지 (비동기 로드 콜백과 CheckAndStartGame 사이에 GC가 동작해도 댕글링 포인터 발생 안 함)
-	UPROPERTY()
-	TObjectPtr<USaveAndLoadGame> CurrentSaveData;
-	
+
 	float DisplayProgress = 0.0f;
 	float TargetProgress = 0.0f;
+
+	/** CurrentDay, TotalRequestAttack/Hit — ISaveableComponent::SaveTo/LoadFrom으로 저장/로드 */
+	int32 CurrentDay = 1;
+	int32 TotalRequestAttack = 0;
+	int32 TotalRequestHit = 0;
 	
 	int32 PendingBossRequestID = INDEX_NONE;
 	

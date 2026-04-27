@@ -20,12 +20,13 @@
 #include "CoreMinimal.h"
 #include "ItemInstance.h"
 #include "Components/ActorComponent.h"
+#include "Save/ISaveableComponent.h"
 #include "InventoryComponent.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventoryChanged, const FItemInstance&, Item, int32, SlotIndex);
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class THESEVENTHBULLET_API UInventoryComponent : public UActorComponent
+class THESEVENTHBULLET_API UInventoryComponent : public UActorComponent, public ISaveableComponent
 {
 	GENERATED_BODY()
 
@@ -73,8 +74,17 @@ public:
 	
 	UFUNCTION()
 	void LoadData(TArray<FItemInstance>& InventoryItem);
-	
+
 	void ClearAllItems();
+
+	// ISaveableComponent
+	// GetSaveableId는 소유 액터 타입에 따라 분기 (MainCharacter → PlayerInventory)
+	virtual void SaveTo(USaveAndLoadGame* SaveData) const override;
+	virtual void LoadFrom(const USaveAndLoadGame* SaveData) override;
+	virtual FName GetSaveableId() const override { return FName("PlayerInventory"); }
+
+protected:
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory")
 	TArray<FItemInstance> Items;

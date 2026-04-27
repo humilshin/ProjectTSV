@@ -10,8 +10,10 @@
 #include "Component/EquipmentComponent.h" // 주현 : EquipmentComponent
 #include "Component/StatusComponent.h" // StatusComponent
 #include "Components/CapsuleComponent.h"
+#include "Data/SaveAndLoadGame.h"
 #include "DataAsset/WeaponDataAsset.h"
 #include "Inventory/InventoryComponent.h" // Inventory
+#include "Save/SaveManager.h"
 #include "UI/UITags.h"
 #include "Manager/UIManager.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -120,6 +122,35 @@ void AMainCharacter::BeginPlay()
 	CurrentHP = static_cast<float>(TotalStatus.HP);
 	CurrentStamina = static_cast<float>(TotalStatus.Stamina);
 
+	// SaveManager에 등록 (자기 담당 영역 SaveTo/LoadFrom 제공)
+	if (USaveManager* SM = USaveManager::Get(this))
+	{
+		SM->Register(TScriptInterface<ISaveableComponent>(this));
+	}
+}
+
+void AMainCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (USaveManager* SM = USaveManager::Get(this))
+	{
+		SM->Unregister(TScriptInterface<ISaveableComponent>(this));
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+void AMainCharacter::SaveTo(USaveAndLoadGame* SaveData) const
+{
+	if (!SaveData) return;
+	SaveData->CharacterTotalStat = GetTotalStatus();
+	SaveData->Gold = const_cast<AMainCharacter*>(this)->GetGold();
+}
+
+void AMainCharacter::LoadFrom(const USaveAndLoadGame* SaveData)
+{
+	if (!SaveData) return;
+	FCharacterStat StatCopy = SaveData->CharacterTotalStat;
+	int32 GoldCopy = SaveData->Gold;
+	LoadData(StatCopy, GoldCopy);
 }
 
 void AMainCharacter::ThrowGrenade()

@@ -3,6 +3,9 @@
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
+#include "Save/SaveManager.h"
+#include "Save/SaveTriggerTypes.h"
+#include "System/GameInstance/MainGameInstance.h"
 #include "System/MainGameMode.h"
 #include "System/TownPhase.h"
 #include "Character/MainCharacter.h"
@@ -17,6 +20,7 @@ void USaveComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	GI = UMainGameInstance::Get(this);
+	SaveManager = USaveManager::Get(this);
 	
 	APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
 	if (PC && SaveWidgetClass)
@@ -59,7 +63,7 @@ void USaveComponent::OnWakeAnimComplete()
 
 void USaveComponent::HandleNextDay()
 {
-	GI->CurrentDay++;
+	if (GI) GI->AdvanceDay();
 
 	// 일차별 물약 지급: 1일차→1개, 2일차→2개, 3일차 이후→3개
 	AMainCharacter* Character = Cast<AMainCharacter>(UGameplayStatics::GetPlayerCharacter(this, 0));
@@ -68,7 +72,7 @@ void USaveComponent::HandleNextDay()
 		UInventoryComponent* Inventory = Character->GetComponentByClass<UInventoryComponent>();
 		if (Inventory)
 		{
-			int32 PotionCount = FMath::Min(GI->CurrentDay, 3);
+			int32 PotionCount = GI ? FMath::Min(GI->GetCurrentDay(), 3) : 1;
 			FPrimaryAssetId PotionID(FPrimaryAssetType("Item"), FName("DA_HealthPotion"));
 			Inventory->AddItem(PotionID, PotionCount);
 
@@ -108,11 +112,18 @@ void USaveComponent::BeginInteract(AActor* Interactor)
 {
 	if (bIsTransitioning) return;
 
-	if (!GI || !SaveWidget) return;
+	if (!SaveWidget) return;
 
 	bIsTransitioning = true;
 
-	GI->SaveGameData();
+	if (SaveManager)
+	{
+		SaveManager->RequestSave(ESaveTrigger::Sleep);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[SaveComponent] SaveManager 없음 — 저장 건너뜀"));
+	}
 
 	SetPlayerInputEnabled(Interactor, false);
 

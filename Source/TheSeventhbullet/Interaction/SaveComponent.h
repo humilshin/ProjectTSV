@@ -2,9 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "BaseInteractionComponent.h"
-#include "System/GameInstance/MainGameInstance.h"
 #include "UI/SaveWidget.h"
 #include "SaveComponent.generated.h"
+
+class UMainGameInstance;
+class USaveManager;
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class THESEVENTHBULLET_API USaveComponent : public UBaseInteractionComponent
@@ -37,5 +39,9 @@ private:
 
 	
 private:
-	UMainGameInstance* GI = nullptr;
+	UPROPERTY()
+	TObjectPtr<UMainGameInstance> GI = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<USaveManager> SaveManager = nullptr;
 };

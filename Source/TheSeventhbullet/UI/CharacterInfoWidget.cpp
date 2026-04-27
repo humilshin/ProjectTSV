@@ -59,7 +59,7 @@ void UCharacterInfoWidget::RefreshInfo()
 	{
 		if (UMainGameInstance* GI = Cast<UMainGameInstance>(GetGameInstance()))
 		{
-			DayText->SetText(FText::FromString(FString::Printf(TEXT("Day : %d"), GI->CurrentDay)));
+			DayText->SetText(FText::FromString(FString::Printf(TEXT("Day : %d"), GI->GetCurrentDay())));
 		}
 	}
 	if (WeaponText)

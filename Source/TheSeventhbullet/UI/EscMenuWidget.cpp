@@ -4,6 +4,8 @@
 #include "Components/TextBlock.h"
 #include "Components/PanelWidget.h"
 #include "Manager/UIManager.h"
+#include "Save/SaveManager.h"
+#include "Save/SaveTriggerTypes.h"
 #include "System/GameInstance/MainGameInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -129,10 +131,15 @@ void UEscMenuWidget::OnBackToMenuClicked()
 
 void UEscMenuWidget::OnQuitGameClicked()
 {
-	UMainGameInstance* GI = UMainGameInstance::Get(this);
-	if (GI)
+	// QuitGame 트리거: 저장 완료 콜백 내에서 FPlatformMisc::RequestExit 호출 (IO 완료 보장)
+	if (USaveManager* SM = USaveManager::Get(this))
 	{
-		GI->SaveGameData();
+		SM->RequestSave(ESaveTrigger::QuitGame);
+		// RequestExit는 SaveManager::HandleAsyncSaveDone에서 처리 — 별도 QuitGame 호출 불필요
 	}
-	UKismetSystemLibrary::QuitGame(this, nullptr, EQuitPreference::Quit, true);
+	else
+	{
+		// SaveManager 없을 경우 폴백
+		UKismetSystemLibrary::QuitGame(this, nullptr, EQuitPreference::Quit, true);
+	}
 }

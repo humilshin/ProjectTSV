@@ -77,7 +77,7 @@ void AEnemyBase::SetupEnemy(UEnemyDataAsset* LoadedData)
 	
 	//일차 기반으로 공격력 상승. 계산식은  체력 : x^2, 공격력, 방어력 : x^2*0.1f
 	GI=UMainGameInstance::Get(this);
-	CurrentDay=GI->CurrentDay;
+	CurrentDay=GI->GetCurrentDay();
 	MaxHealth=CurrentDay*CurrentDay*MaxHealth;
 	NowHealth=MaxHealth;
 	ArmorPoint=ArmorPoint*(CurrentDay*CurrentDay*0.1f);

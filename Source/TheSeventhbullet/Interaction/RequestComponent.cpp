@@ -42,10 +42,10 @@ void URequestComponent::BeginInteract(AActor* Interactor)
 	UMainGameInstance* GI = UMainGameInstance::Get(this);
 	if (!GI) return;
 
-	if (LastRefreshedDay != GI->CurrentDay)
+	if (LastRefreshedDay != GI->GetCurrentDay())
 	{
 		RefreshRequests();
-		LastRefreshedDay = GI->CurrentDay;
+		LastRefreshedDay = GI->GetCurrentDay();
 	}
 
 	if (CachedRequestIDs.Num() == 0) return;
@@ -75,7 +75,7 @@ void URequestComponent::RefreshRequests()
 	UMainGameInstance* GI = UMainGameInstance::Get(this);
 	if (!GI) return;
 
-	int32 CurrentDay = GI->CurrentDay;
+	int32 CurrentDay = GI->GetCurrentDay();
 
 	constexpr int32 BossRequestID = 100;
 	constexpr int32 BossDay = 7;

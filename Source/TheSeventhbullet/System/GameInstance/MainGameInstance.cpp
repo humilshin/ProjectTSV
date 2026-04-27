@@ -1,24 +1,21 @@
 
-
 #include "MainGameInstance.h"
 
 #include "LevelSequencePlayer.h"
+#include "Character/MainCharacter.h"
 #include "Character/Component/EquipmentComponent.h"
-#include "DataAsset/WeaponDataAsset.h"
-#include "Engine/AssetManager.h"
 #include "Character/Component/StatusComponent.h"
 #include "Data/SaveAndLoadGame.h"
-#include "Interaction/ChestActor.h"
 #include "Inventory/InventoryComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Manager/SoundManager.h"
 #include "Manager/UIManager.h"
+#include "Save/SaveManager.h"
 #include "System/MonsterManagerSubSystem.h"
 #include "UI/UITags.h"
 #include "UI/LoadingScreenWidget.h"
 #include "TheSeventhbullet/System/MainGameMode.h"
 
-const FString UMainGameInstance::SaveSlotName = TEXT("TheSeventhBullet");
 const FName UMainGameInstance::StartLevelName = FName(TEXT("L_Town"));
 
 UMainGameInstance* UMainGameInstance::Get(const UObject* WorldContext)
@@ -26,130 +23,65 @@ UMainGameInstance* UMainGameInstance::Get(const UObject* WorldContext)
 	return Cast<UMainGameInstance>(UGameplayStatics::GetGameInstance(WorldContext));
 }
 
-void UMainGameInstance::SaveGameData()
+void UMainGameInstance::OnStart()
 {
-	int32 UserIndex = 0;
-
-	USaveAndLoadGame* SaveObj = Cast<USaveAndLoadGame>(UGameplayStatics::CreateSaveGameObject(USaveAndLoadGame::StaticClass()));
-	if (!SaveObj) return;
-	
-	AMainCharacter* MainCharacter = Cast<AMainCharacter>(UGameplayStatics::GetPlayerCharacter(this,0));
-	if (!MainCharacter)
-	{
-		UE_LOG(LogTemp,Error, TEXT("AMainCharacter를 못가져옴"));
-		return;
-	}
-	SaveObj->CharacterTotalStat = MainCharacter->GetTotalStatus();
-	SaveObj->Gold = MainCharacter->GetGold();
-			
-	UEquipmentComponent* EquipmentComponent = MainCharacter->GetComponentByClass<UEquipmentComponent>();
-	if (!EquipmentComponent)
-	{
-		UE_LOG(LogTemp, Error, TEXT("EquipmentComponent를 못 가져옴"));
-		return;
-	}
-	SaveObj->EquippedSoulGems = EquipmentComponent->EquippedSoulGems;
-
-	// 장착 무기 저장 (CurrentWeapon 우선, 없으면 PendingWeapon)
-	UWeaponDataAsset* WeaponToSave = EquipmentComponent->CurrentWeapon;
-	if (!WeaponToSave)
-	{
-		WeaponToSave = EquipmentComponent->PendingWeapon;
-	}
-	if (WeaponToSave)
-	{
-		SaveObj->EquippedWeaponID = WeaponToSave->GetPrimaryAssetId();
-	}
-			
-	UStatusComponent* StatusComponent = MainCharacter->GetComponentByClass<UStatusComponent>();
-	if (!StatusComponent)
-	{
-		UE_LOG(LogTemp, Error, TEXT("StatusComponent를 못 가져옴"));
-		return;
-	}
-	SaveObj->CharacterBaseStat = StatusComponent->GetCharacterBaseStatus();
-	SaveObj->CharacterEnhanceStat = StatusComponent->GetCharacterEnhanceStatus();
-			
-	UInventoryComponent* CharacterInventoryComponent = MainCharacter->GetComponentByClass<UInventoryComponent>();
-	if (!CharacterInventoryComponent)
-	{
-		UE_LOG(LogTemp, Error, TEXT("Character InventoryComponent를 못 가져옴"));
-		return;
-	}
-	SaveObj->CharacterInventoryItems = CharacterInventoryComponent->GetAllItems();
-			
-	// [T0.2] ChestActor / ChestInventoryComponent null 가드
-	// null이면 경고 로그 후 ChestInventory 저장만 스킵하고 나머지 저장은 계속 진행 (Race Condition 방지)
-	AActor* FoundChest = UGameplayStatics::GetActorOfClass(this, AChestActor::StaticClass());
-	AChestActor* ChestActor = Cast<AChestActor>(FoundChest);
-	if (!ChestActor)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[SaveGameData] ChestActor를 찾지 못했습니다 — ChestInventory 저장을 건너뜁니다."));
-	}
-	else
-	{
-		UInventoryComponent* ChestInventoryComponent = ChestActor->GetComponentByClass<UInventoryComponent>();
-		if (!ChestInventoryComponent)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[SaveGameData] ChestActor의 InventoryComponent를 찾지 못했습니다 — ChestInventory 저장을 건너뜁니다."));
-		}
-		else
-		{
-			SaveObj->ChestInventoryItems = ChestInventoryComponent->GetAllItems();
-		}
-	}
-
-	SaveObj->CurrentDay = CurrentDay;
-	SaveObj->TotalAttack = TotalRequestAttack;
-	SaveObj->TotalHit = TotalRequestHit;
-
-	// [T0.3] 동기 SaveGameToSlot → AsyncSaveGameToSlot 전환 (게임 스레드 블로킹 제거)
-	// 주의: Quit 직전 호출 시 IO 완료 전 프로세스가 종료될 수 있음.
-	// Phase 1에서 USaveManager(Subsystem)로 이관 시 Quit 경로는 콜백 후 RequestExit 체인으로 해소 예정.
-	FAsyncSaveGameToSlotDelegate SaveDelegate;
-	SaveDelegate.BindLambda([](const FString& Slot, const int32 Idx, bool bSuccess)
-	{
-		if (bSuccess)
-		{
-			UE_LOG(LogTemp, Log, TEXT("[SaveGameData] 비동기 저장 완료 — 슬롯: %s"), *Slot);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("[SaveGameData] 비동기 저장 실패 — 슬롯: %s"), *Slot);
-		}
-	});
-	UGameplayStatics::AsyncSaveGameToSlot(SaveObj, SaveSlotName, UserIndex, SaveDelegate);
+	Super::OnStart();
+	// GameInstanceSubsystem이 초기화된 후 호출되므로 Register 안전
+	RegisterToSaveManager();
 }
 
-void UMainGameInstance::LoadAsyncSaveData()
+// ISaveableComponent 구현 — GameInstance 담당 영역(통계/날짜)만 처리
+
+void UMainGameInstance::SaveTo(USaveAndLoadGame* SaveData) const
 {
-	int32 UserIndex = 0;
-	FAsyncLoadGameFromSlotDelegate LoadedDelegate;
-	LoadedDelegate.BindUObject(this, &UMainGameInstance::OnSaveDataLoadFinished);
-	UGameplayStatics::AsyncLoadGameFromSlot(SaveSlotName, UserIndex, LoadedDelegate);
-	
+	if (!SaveData) return;
+	SaveData->CurrentDay = CurrentDay;
+	SaveData->TotalRequestAttack = TotalRequestAttack;
+	SaveData->TotalRequestHit = TotalRequestHit;
+}
+
+void UMainGameInstance::LoadFrom(const USaveAndLoadGame* SaveData)
+{
+	if (!SaveData) return;
+	CurrentDay = SaveData->CurrentDay;
+	TotalRequestAttack = SaveData->TotalRequestAttack;
+	TotalRequestHit = SaveData->TotalRequestHit;
 }
 
 
 void UMainGameInstance::StartNewGame()
 {
-	bIsDataLoaded = true;
+	// 새 게임: 데이터 로드 없이 맵만 스트리밍. SaveManager에 폴링 플래그만 설정.
+	bPollDataReady = true;
 	GameStartMapLoad();
 }
 
 void UMainGameInstance::ReturnToMainMenu()
 {
-	SaveGameData();
-
-	UGameplayStatics::SetGamePaused(GetWorld(), false);
-
-	AMainGameMode* GM = AMainGameMode::Get(this);
-	if (GM)
+	if (USaveManager* SM = GetSubsystem<USaveManager>())
 	{
-		GM->ReturnToMainMenu();
+		SM->RequestSave(ESaveTrigger::ReturnToMenu, FSimpleDelegate::CreateLambda([this]()
+		{
+			UGameplayStatics::SetGamePaused(GetWorld(), false);
+
+			AMainGameMode* GM = AMainGameMode::Get(this);
+			if (GM)
+			{
+				GM->ReturnToMainMenu();
+			}
+		}));
 	}
-	
-	
+	else
+	{
+		// SaveManager 없을 경우 폴백 (에디터 등 예외 상황)
+		UGameplayStatics::SetGamePaused(GetWorld(), false);
+
+		AMainGameMode* GM = AMainGameMode::Get(this);
+		if (GM)
+		{
+			GM->ReturnToMainMenu();
+		}
+	}
 }
 
 void UMainGameInstance::GameStartMapLoad()
@@ -157,6 +89,12 @@ void UMainGameInstance::GameStartMapLoad()
 	if (UUIManager* UIMgr = UUIManager::Get(this))
 	{
 		UIMgr->Close(UITags::MainMenu);
+	}
+
+	// SaveManager의 로드 완료 이벤트를 구독하여 로딩 진행률 폴링에 반영
+	if (USaveManager* SM = GetSubsystem<USaveManager>())
+	{
+		SM->OnLoadApplied.AddUObject(this, &UMainGameInstance::NotifySaveManagerLoadApplied);
 	}
 
 	FLatentActionInfo LatentInfo;
@@ -170,106 +108,27 @@ void UMainGameInstance::GameStartMapLoad()
 	UGameplayStatics::LoadStreamLevel(this, StartLevelName, true, false, LatentInfo);
 }
 
-void UMainGameInstance::OnSaveDataLoadFinished(const FString& SlotName, const int32 UserIndex, USaveGame* LoadedGameData)
+void UMainGameInstance::RegisterToSaveManager()
 {
-	CurrentSaveData = Cast<USaveAndLoadGame>(LoadedGameData);
-	if (!CurrentSaveData)
+	if (USaveManager* SM = GetSubsystem<USaveManager>())
 	{
-		UE_LOG(LogTemp, Error, TEXT("Load failed"));
-		return;
+		SM->Register(TScriptInterface<ISaveableComponent>(this));
 	}
-	
-	bIsDataLoaded = true;
-	CheckAndStartGame();
+}
+
+void UMainGameInstance::NotifySaveManagerLoadApplied(bool bSuccess)
+{
+	bPollDataReady = true;
 }
 
 void UMainGameInstance::OnMapLoadFinished()
 {
-	bIsMapLoaded = true;
-	CheckAndStartGame();
-}
+	bPollMapReady = true;
 
-void UMainGameInstance::CheckAndStartGame()
-{
-	if (bIsDataLoaded && bIsMapLoaded)
+	// SaveManager에 맵 로드 완료 알림 → TryApplyLoadedData 조건 충족 시 Saveable LoadFrom 적용
+	if (USaveManager* SM = GetSubsystem<USaveManager>())
 	{
-		if (!CurrentSaveData)
-		{
-			TargetProgress = 1.0f;
-			bIsMapLoaded = false;
-			bIsDataLoaded = false;
-			return;
-		}
-		
-		AMainCharacter* MainCharacter = Cast<AMainCharacter>(UGameplayStatics::GetPlayerCharacter(this,0));
-		if (!MainCharacter)
-		{
-			UE_LOG(LogTemp,Error, TEXT("AMainCharacter를 못가져옴"));
-			return;
-		}
-		MainCharacter->LoadData(CurrentSaveData->CharacterTotalStat, CurrentSaveData->Gold);
-		
-		UEquipmentComponent* EquipmentComponent = MainCharacter->GetComponentByClass<UEquipmentComponent>();
-		if (!EquipmentComponent)
-		{
-			UE_LOG(LogTemp, Error, TEXT("EquipmentComponent를 못 가져옴"));
-			return;
-		}
-		EquipmentComponent->LoadData(CurrentSaveData->EquippedSoulGems);
-
-		// 장착 무기 복원
-		if (CurrentSaveData->EquippedWeaponID.IsValid())
-		{
-			UAssetManager& AssetManager = UAssetManager::Get();
-			FSoftObjectPath WeaponPath = AssetManager.GetPrimaryAssetPath(CurrentSaveData->EquippedWeaponID);
-			if (WeaponPath.IsValid())
-			{
-				UWeaponDataAsset* LoadedWeapon = Cast<UWeaponDataAsset>(WeaponPath.TryLoad());
-				if (LoadedWeapon)
-				{
-					EquipmentComponent->PendingWeapon = LoadedWeapon;
-				}
-			}
-		}
-			
-		UStatusComponent* StatusComponent = MainCharacter->GetComponentByClass<UStatusComponent>();
-		if (!StatusComponent)
-		{
-			UE_LOG(LogTemp, Error, TEXT("StatusComponent를 못 가져옴"));
-			return;
-		}
-		StatusComponent->LoadData(CurrentSaveData->CharacterBaseStat,CurrentSaveData->CharacterEnhanceStat);
-			
-		UInventoryComponent* CharacterInventoryComponent = MainCharacter->GetComponentByClass<UInventoryComponent>();
-		if (!CharacterInventoryComponent)
-		{
-			UE_LOG(LogTemp, Error, TEXT("Character InventoryComponent를 못 가져옴"));
-			return;
-		}
-		CharacterInventoryComponent->LoadData(CurrentSaveData->CharacterInventoryItems);
-			
-		AActor* FoundChest = UGameplayStatics::GetActorOfClass(this, AChestActor::StaticClass());
-		AChestActor* ChestActor = Cast<AChestActor>(FoundChest);
-		if (!ChestActor)
-		{
-			UE_LOG(LogTemp,Error, TEXT("ChestActor를 못 가져옴"));
-			return;
-		}
-		UInventoryComponent* ChestInventoryComponent = ChestActor->GetComponentByClass<UInventoryComponent>();
-		if (!ChestInventoryComponent)
-		{
-			UE_LOG(LogTemp, Error, TEXT("ChestActor Inventory를 못 가져옴"));
-		}
-		ChestInventoryComponent->LoadData(CurrentSaveData->ChestInventoryItems);
-		
-		CurrentDay = CurrentSaveData->CurrentDay;
-		TotalRequestAttack = CurrentSaveData->TotalAttack;
-		TotalRequestHit = CurrentSaveData->TotalHit;
-		
-		TargetProgress = 1.0f;
-
-		bIsMapLoaded = false;
-		bIsDataLoaded = false;
+		SM->NotifyMapLoaded();
 	}
 }
 
@@ -316,7 +175,11 @@ void UMainGameInstance::HideLoadingScreen()
 
 bool UMainGameInstance::DoesSaveExist() const
 {
-	return UGameplayStatics::DoesSaveGameExist(SaveSlotName, 0);
+	if (const USaveManager* SM = GetSubsystem<USaveManager>())
+	{
+		return SM->HasSaveSlot();
+	}
+	return false;
 }
 
 void UMainGameInstance::ResetGameData()
@@ -353,9 +216,11 @@ void UMainGameInstance::ResetGameData()
 	FPrimaryAssetId PotionID(FPrimaryAssetType("Item"), FName("DA_HealthPotion"));
 	CharacterInventory->AddItem(PotionID, 1);
 
-	if (UGameplayStatics::DoesSaveGameExist(SaveSlotName, 0))
+	// SaveManager 슬롯 이름과 동일한 슬롯 삭제
+	const FString ResetSlotName = TEXT("TheSeventhBullet");
+	if (UGameplayStatics::DoesSaveGameExist(ResetSlotName, 0))
 	{
-		bool bIsDeleted = UGameplayStatics::DeleteGameInSlot(SaveSlotName, 0);
+		bool bIsDeleted = UGameplayStatics::DeleteGameInSlot(ResetSlotName, 0);
 		if (bIsDeleted)
 		{
 			UE_LOG(LogTemp, Log, TEXT("세이브 파일이 성공적으로 삭제되었습니다."));
@@ -365,8 +230,6 @@ void UMainGameInstance::ResetGameData()
 			UE_LOG(LogTemp, Warning, TEXT("세이브 파일 삭제에 실패했습니다."));
 		}
 	}
-    
-	CurrentSaveData = nullptr;
 }
 
 void UMainGameInstance::RequestBossStage(int32 InRequestID)
@@ -490,8 +353,8 @@ void UMainGameInstance::PollLoadingProgress()
 	}
 	
 	float RealTarget = 0.0f;
-	if (bIsDataLoaded) RealTarget += 0.5f;
-	if (bIsMapLoaded) RealTarget += 0.5f;
+	if (bPollDataReady) RealTarget += 0.5f;
+	if (bPollMapReady) RealTarget += 0.5f;
 	if (RealTarget > TargetProgress)
 	{
 		TargetProgress = RealTarget;
@@ -509,6 +372,9 @@ void UMainGameInstance::PollLoadingProgress()
 	
 	if (DisplayProgress >= 1.0f)
 	{
+		bPollDataReady = false;
+		bPollMapReady = false;
+
 		HideLoadingScreen();
 
 		AMainGameMode* GM = AMainGameMode::Get(this);

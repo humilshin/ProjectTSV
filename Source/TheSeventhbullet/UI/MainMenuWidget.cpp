@@ -4,6 +4,7 @@
 #include "Components/TextBlock.h"
 #include "Components/PanelWidget.h"
 #include "Manager/UIManager.h"
+#include "Save/SaveManager.h"
 #include "System/GameInstance/MainGameInstance.h"
 #include "Kismet/KismetSystemLibrary.h"
 
@@ -108,11 +109,14 @@ void UMainMenuWidget::OnAnyButtonUnhovered()
 void UMainMenuWidget::OnContinueClicked()
 {
 	UMainGameInstance* GI = UMainGameInstance::Get(this);
-	if (GI)
+	if (!GI) return;
+
+	// RequestLoad: 비동기 로드 시작 → SaveManager가 bIsDataLoaded 관리
+	if (USaveManager* SM = USaveManager::Get(this))
 	{
-		GI->LoadAsyncSaveData();
-		GI->GameStartMapLoad();
+		SM->RequestLoad();
 	}
+	GI->GameStartMapLoad();
 }
 
 void UMainMenuWidget::OnNewGameClicked()

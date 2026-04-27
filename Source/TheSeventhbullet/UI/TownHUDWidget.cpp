@@ -68,7 +68,7 @@ void UTownHUDWidget::ApplyPhaseContent()
 FText UTownHUDWidget::BuildPhaseMessage() const
 {
 	UMainGameInstance* GI = UMainGameInstance::Get(this);
-	int32 Day = GI ? GI->CurrentDay : 1;
+	int32 Day = GI ? GI->GetCurrentDay() : 1;
 
 	AMainGameMode* GM = AMainGameMode::Get(this);
 

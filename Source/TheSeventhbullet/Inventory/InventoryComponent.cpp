@@ -1,7 +1,10 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 #include "InventoryComponent.h"
+#include "Character/MainCharacter.h"
+#include "Data/SaveAndLoadGame.h"
 #include "DataAsset/ItemDataAsset.h"
 #include "Manager/AsyncDataManager.h"
+#include "Save/SaveManager.h"
 
 UInventoryComponent::UInventoryComponent()
 {
@@ -12,6 +15,41 @@ void UInventoryComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	Items.SetNum(MaxSlots);
+
+	// ChestActor 소유 InventoryComponent는 ChestActor가 직접 ISaveableComponent를 구현하므로 등록 제외
+	// MainCharacter 소유인 경우만 등록
+	if (Cast<AMainCharacter>(GetOwner()))
+	{
+		if (USaveManager* SM = USaveManager::Get(this))
+		{
+			SM->Register(TScriptInterface<ISaveableComponent>(this));
+		}
+	}
+}
+
+void UInventoryComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (Cast<AMainCharacter>(GetOwner()))
+	{
+		if (USaveManager* SM = USaveManager::Get(this))
+		{
+			SM->Unregister(TScriptInterface<ISaveableComponent>(this));
+		}
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+void UInventoryComponent::SaveTo(USaveAndLoadGame* SaveData) const
+{
+	if (!SaveData) return;
+	SaveData->CharacterInventoryItems = GetAllItems();
+}
+
+void UInventoryComponent::LoadFrom(const USaveAndLoadGame* SaveData)
+{
+	if (!SaveData) return;
+	TArray<FItemInstance> ItemsCopy = SaveData->CharacterInventoryItems;
+	LoadData(ItemsCopy);
 }
 
 bool UInventoryComponent::AddItem(FPrimaryAssetId ItemID, int32 Count)

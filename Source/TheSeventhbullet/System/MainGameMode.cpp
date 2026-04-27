@@ -294,7 +294,7 @@ void AMainGameMode::ItemDropFromMonster(EMonsterType MonsterType)
 	UMainGameInstance* GI = GetGameInstance<UMainGameInstance>();
 	if (!GI) return;
 	FMonsterDropRowData Row =  DataManager->GetDropMaterialData(MonsterType);
-	const int32 StageIndex = FMath::Clamp(GI->CurrentDay - 1, 0, Row.Stages.Num() - 1);
+	const int32 StageIndex = FMath::Clamp(GI->GetCurrentDay() - 1, 0, Row.Stages.Num() - 1);
 	if (!Row.Stages.IsValidIndex(StageIndex)) return;
 
 	const FStageDropData& DropData = Row.Stages[StageIndex];

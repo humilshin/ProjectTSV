@@ -2,6 +2,8 @@
 
 #include "EquipmentComponent.h"
 #include "Character/MainCharacter.h"
+#include "Data/SaveAndLoadGame.h"
+#include "Save/SaveManager.h"
 
 UStatusComponent::UStatusComponent()
 {
@@ -36,7 +38,35 @@ void UStatusComponent::UpdateTotalStat()
 
 void UStatusComponent::BeginPlay()
 {
-	Super::BeginPlay();	
+	Super::BeginPlay();
+	if (USaveManager* SM = USaveManager::Get(this))
+	{
+		SM->Register(TScriptInterface<ISaveableComponent>(this));
+	}
+}
+
+void UStatusComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (USaveManager* SM = USaveManager::Get(this))
+	{
+		SM->Unregister(TScriptInterface<ISaveableComponent>(this));
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+void UStatusComponent::SaveTo(USaveAndLoadGame* SaveData) const
+{
+	if (!SaveData) return;
+	SaveData->CharacterBaseStat = GetCharacterBaseStatus();
+	SaveData->CharacterEnhanceStat = GetCharacterEnhanceStatus();
+}
+
+void UStatusComponent::LoadFrom(const USaveAndLoadGame* SaveData)
+{
+	if (!SaveData) return;
+	FCharacterStat StatCopy = SaveData->CharacterBaseStat;
+	FEnhancerStatus EnhanceCopy = SaveData->CharacterEnhanceStat;
+	LoadData(StatCopy, EnhanceCopy);
 }
 
 FCharacterStat UStatusComponent::EnhanceStatToCharacterStat()

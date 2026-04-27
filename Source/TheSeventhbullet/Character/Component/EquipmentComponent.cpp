@@ -1,8 +1,69 @@
 #include "EquipmentComponent.h"
 #include "Character/MainCharacter.h"
+#include "Data/SaveAndLoadGame.h"
 #include "DataAsset/WeaponDataAsset.h"
+#include "Engine/AssetManager.h"
 #include "Manager/AsyncDataManager.h"
-#include "Manager/AsyncDataManager.h"
+#include "Save/SaveManager.h"
+
+void UEquipmentComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	if (USaveManager* SM = USaveManager::Get(this))
+	{
+		SM->Register(TScriptInterface<ISaveableComponent>(this));
+	}
+}
+
+void UEquipmentComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (USaveManager* SM = USaveManager::Get(this))
+	{
+		SM->Unregister(TScriptInterface<ISaveableComponent>(this));
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+void UEquipmentComponent::SaveTo(USaveAndLoadGame* SaveData) const
+{
+	if (!SaveData) return;
+	SaveData->EquippedSoulGems = EquippedSoulGems;
+
+	// CurrentWeapon 우선, 없으면 PendingWeapon
+	UWeaponDataAsset* WeaponToSave = CurrentWeapon ? CurrentWeapon : PendingWeapon;
+	if (WeaponToSave)
+	{
+		SaveData->EquippedWeaponID = WeaponToSave->GetPrimaryAssetId();
+	}
+}
+
+void UEquipmentComponent::LoadFrom(const USaveAndLoadGame* SaveData)
+{
+	if (!SaveData) return;
+
+	// 소울젬 로드
+	TArray<FSoulGemInstance> GemsCopy = SaveData->EquippedSoulGems;
+	LoadData(GemsCopy);
+
+	// 무기 복원
+	if (SaveData->EquippedWeaponID.IsValid())
+	{
+		UAssetManager& AssetManager = UAssetManager::Get();
+		FSoftObjectPath WeaponPath = AssetManager.GetPrimaryAssetPath(SaveData->EquippedWeaponID);
+		if (WeaponPath.IsValid())
+		{
+			UWeaponDataAsset* LoadedWeapon = Cast<UWeaponDataAsset>(WeaponPath.TryLoad());
+			if (LoadedWeapon)
+			{
+				PendingWeapon = LoadedWeapon;
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[EquipmentComponent::LoadFrom] 무기 로드 실패: %s"), *SaveData->EquippedWeaponID.ToString());
+			}
+		}
+	}
+}
 
 void UEquipmentComponent::EquipSoulGem(const FSoulGemInstance& SoulGem, int32 SlotIndex)
 {

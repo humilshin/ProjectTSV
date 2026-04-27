@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Save/ISaveableComponent.h"
 #include "SoulGem/SoulGemInstance.h"
 #include "EquipmentComponent.generated.h"
 
@@ -11,7 +12,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGemEquipmentChanged);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWeaponEquipmentChanged, UWeaponDataAsset*, WeaponData);
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class THESEVENTHBULLET_API UEquipmentComponent : public UActorComponent
+class THESEVENTHBULLET_API UEquipmentComponent : public UActorComponent, public ISaveableComponent
 {
 	GENERATED_BODY()
 
@@ -54,9 +55,18 @@ public:
 public:
 	UFUNCTION(BlueprintCallable, Category = "Equipment")
 	void ApplyWeapon();
-	
+
 	UFUNCTION()
 	void LoadData(TArray<FSoulGemInstance>& LoadEquippedSoulGems);
+
+	// ISaveableComponent
+	virtual void SaveTo(USaveAndLoadGame* SaveData) const override;
+	virtual void LoadFrom(const USaveAndLoadGame* SaveData) override;
+	virtual FName GetSaveableId() const override { return FName("Equipment"); }
+
+protected:
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 public:
 	// 장착된 소울젬이 변경
 	UPROPERTY(BlueprintAssignable, Category = "Equipment")

@@ -16,12 +16,13 @@
 
 #include "CoreMinimal.h"
 #include "BaseInteractionActor.h"
+#include "Save/ISaveableComponent.h"
 #include "ChestActor.generated.h"
 
 class UInventoryComponent;
 
 UCLASS()
-class THESEVENTHBULLET_API AChestActor : public ABaseInteractionActor
+class THESEVENTHBULLET_API AChestActor : public ABaseInteractionActor, public ISaveableComponent
 {
 	GENERATED_BODY()
 
@@ -29,9 +30,16 @@ public:
 	AChestActor();
 
 	virtual void Interact(AActor* Interactor) override;
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION(BlueprintPure, Category = "Chest")
 	UInventoryComponent* GetInventoryComponent() const { return InventoryComp; }
+
+	// ISaveableComponent — 창고 인벤토리 담당
+	virtual void SaveTo(USaveAndLoadGame* SaveData) const override;
+	virtual void LoadFrom(const USaveAndLoadGame* SaveData) override;
+	virtual FName GetSaveableId() const override { return FName("ChestInventory"); }
 
 protected:
 	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Chest")

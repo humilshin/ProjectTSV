@@ -1,8 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Character/MainCharacter.h"
 #include "GameFramework/SaveGame.h"
+#include "Data/StatusTypes.h"
 #include "Inventory/ItemInstance.h"
 #include "SoulGem/SoulGemInstance.h"
 #include "SaveAndLoadGame.generated.h"
@@ -47,9 +47,9 @@ public:
 	int32 CurrentDay;//현재 날짜
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	int32 TotalAttack;//총을 맞힌 총횟수
-	
+	int32 TotalRequestAttack;//총을 맞힌 총횟수
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	int32 TotalHit;//총 공격을 당한 횟수
+	int32 TotalRequestHit;//총 공격을 당한 횟수
 	
 };
