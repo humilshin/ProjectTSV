@@ -78,11 +78,8 @@ public:
 	/** 하루 전진 (침대 저장 시 호출) */
 	void AdvanceDay() { CurrentDay++; }
 
-	/** 공격 횟수 증가 */
-	void AddAttackCount() { TotalRequestAttack++; }
-
-	/** 피격 횟수 증가 */
-	void AddHitCount() { TotalRequestHit++; }
+	void AddAttackCount(int32 Count = 1) { TotalRequestAttack += Count; }
+	void AddHitCount(int32 Count = 1) { TotalRequestHit += Count; }
 
 	// ISaveableComponent
 	virtual void SaveTo(USaveAndLoadGame* SaveData) const override;

@@ -543,8 +543,8 @@ void AMainGameMode::ReturnToTown()
 	UMainGameInstance* GI = UMainGameInstance::Get(this);
 	if (!GI) return;
 	
-	GI->TotalRequestAttack += RequestAttack;
-	GI->TotalRequestHit += RequestHit;
+	GI->AddAttackCount(RequestAttack);
+	GI->AddHitCount(RequestHit);
 	
 	RequestAttack = 0;
 	RequestHit = 0;
