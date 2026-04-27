@@ -78,29 +78,47 @@ void UMainGameInstance::SaveGameData()
 	}
 	SaveObj->CharacterInventoryItems = CharacterInventoryComponent->GetAllItems();
 			
+	// [T0.2] ChestActor / ChestInventoryComponent null 가드
+	// null이면 경고 로그 후 ChestInventory 저장만 스킵하고 나머지 저장은 계속 진행 (Race Condition 방지)
 	AActor* FoundChest = UGameplayStatics::GetActorOfClass(this, AChestActor::StaticClass());
 	AChestActor* ChestActor = Cast<AChestActor>(FoundChest);
 	if (!ChestActor)
 	{
-		UE_LOG(LogTemp,Error, TEXT("ChestActor를 못 가져옴"));
-		return;
+		UE_LOG(LogTemp, Warning, TEXT("[SaveGameData] ChestActor를 찾지 못했습니다 — ChestInventory 저장을 건너뜁니다."));
 	}
-	UInventoryComponent* ChestInventoryComponent = ChestActor->GetComponentByClass<UInventoryComponent>();
-	if (!ChestInventoryComponent)
+	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("ChestActor Inventory를 못 가져옴"));
+		UInventoryComponent* ChestInventoryComponent = ChestActor->GetComponentByClass<UInventoryComponent>();
+		if (!ChestInventoryComponent)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[SaveGameData] ChestActor의 InventoryComponent를 찾지 못했습니다 — ChestInventory 저장을 건너뜁니다."));
+		}
+		else
+		{
+			SaveObj->ChestInventoryItems = ChestInventoryComponent->GetAllItems();
+		}
 	}
-	SaveObj->ChestInventoryItems = ChestInventoryComponent->GetAllItems();
-	
+
 	SaveObj->CurrentDay = CurrentDay;
 	SaveObj->TotalAttack = TotalRequestAttack;
 	SaveObj->TotalHit = TotalRequestHit;
-	
-	bool bIsSaved = UGameplayStatics::SaveGameToSlot(SaveObj, SaveSlotName, UserIndex);
-	if (bIsSaved)
+
+	// [T0.3] 동기 SaveGameToSlot → AsyncSaveGameToSlot 전환 (게임 스레드 블로킹 제거)
+	// 주의: Quit 직전 호출 시 IO 완료 전 프로세스가 종료될 수 있음.
+	// Phase 1에서 USaveManager(Subsystem)로 이관 시 Quit 경로는 콜백 후 RequestExit 체인으로 해소 예정.
+	FAsyncSaveGameToSlotDelegate SaveDelegate;
+	SaveDelegate.BindLambda([](const FString& Slot, const int32 Idx, bool bSuccess)
 	{
-		UE_LOG(LogTemp, Log, TEXT("Game Data Save Complete"));	
-	}
+		if (bSuccess)
+		{
+			UE_LOG(LogTemp, Log, TEXT("[SaveGameData] 비동기 저장 완료 — 슬롯: %s"), *Slot);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("[SaveGameData] 비동기 저장 실패 — 슬롯: %s"), *Slot);
+		}
+	});
+	UGameplayStatics::AsyncSaveGameToSlot(SaveObj, SaveSlotName, UserIndex, SaveDelegate);
 }
 
 void UMainGameInstance::LoadAsyncSaveData()

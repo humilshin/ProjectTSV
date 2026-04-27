@@ -16,15 +16,26 @@ ADamageNumberActor::ADamageNumberActor()
 
 void ADamageNumberActor::Init(float Damage, bool bIsCrit)
 {
-	if (DamageWidgetClass)
+	// [T0.4] DamageWidgetClass 미설정 또는 위젯 생성 실패 시 명시적 경고 로그
+	if (!DamageWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[DamageNumberActor] DamageWidgetClass가 블루프린트에서 설정되지 않았습니다 — 데미지 숫자 위젯을 생성할 수 없습니다."));
+	}
+	else
 	{
 		WidgetComp->SetWidgetClass(DamageWidgetClass);
 		WidgetComp->InitWidget();
 	}
 
-	if (UDamageNumberWidget* DamageWidget = Cast<UDamageNumberWidget>(WidgetComp->GetWidget()))
+	UDamageNumberWidget* DamageWidget = Cast<UDamageNumberWidget>(WidgetComp->GetWidget());
+	if (DamageWidget)
 	{
 		DamageWidget->SetDamageInfo(Damage, bIsCrit);
+	}
+	else
+	{
+		// [T0.4] InitWidget() 이후 위젯이 null인 경우 — PlayerController 미연결 또는 클래스 불일치 가능
+		UE_LOG(LogTemp, Warning, TEXT("[DamageNumberActor] WidgetComponent에서 DamageNumberWidget을 가져오지 못했습니다 — 데미지 숫자가 표시되지 않습니다. (InitWidget 타이밍 문제 의심, Phase 2에서 1프레임 지연 재시도로 해소 예정)"));
 	}
 
 	if (bIsCrit)

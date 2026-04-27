@@ -109,8 +109,9 @@ private:
 
 	FTimerHandle ProgressTimerHandle;
 	
+	// [T0.1] UPROPERTY 추가 — GC 수집 방지 (비동기 로드 콜백과 CheckAndStartGame 사이에 GC가 동작해도 댕글링 포인터 발생 안 함)
 	UPROPERTY()
-	USaveAndLoadGame* CurrentSaveData;
+	TObjectPtr<USaveAndLoadGame> CurrentSaveData;
 	
 	float DisplayProgress = 0.0f;
 	float TargetProgress = 0.0f;
