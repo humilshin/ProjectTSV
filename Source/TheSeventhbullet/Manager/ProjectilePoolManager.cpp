@@ -7,6 +7,12 @@
 #include "Enemy/Projectile/ProjectileActor.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 
+void UProjectilePoolManager::Deinitialize()
+{
+	ProjectilePool.Empty();
+	Super::Deinitialize();
+}
+
 void UProjectilePoolManager::Initialize(FSubsystemCollectionBase& SubsystemCollectionBase)
 {
 	Super::Initialize(SubsystemCollectionBase);

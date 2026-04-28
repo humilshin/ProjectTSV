@@ -2,7 +2,7 @@
 
 #include "Data/SaveAndLoadGame.h"
 #include "Kismet/GameplayStatics.h"
-#include "HAL/PlatformMisc.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 const FString USaveManager::SlotName = TEXT("TheSeventhBullet");
 
@@ -130,10 +130,10 @@ void USaveManager::HandleAsyncSaveDone(const FString& Slot, const int32 UserIdx,
         PendingOnComplete.Unbind();
     }
 
-    // QuitGame 트리거: IO 완료 후 프로세스 종료 (데이터 유실 없음 보장)
+    // QuitGame 트리거: IO 완료 후 정상 종료 (UE 정리 흐름 보장)
     if (PendingTrigger == ESaveTrigger::QuitGame)
     {
-        FPlatformMisc::RequestExit(false);
+        UKismetSystemLibrary::QuitGame(GetGameInstance(), nullptr, EQuitPreference::Quit, false);
     }
 }
 

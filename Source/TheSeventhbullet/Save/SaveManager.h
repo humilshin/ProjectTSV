@@ -7,6 +7,7 @@
 #include "SaveManager.generated.h"
 
 class USaveAndLoadGame;
+class USaveGame;
 
 /**
  * 저장/로드 단일 진입점 GameInstanceSubsystem.

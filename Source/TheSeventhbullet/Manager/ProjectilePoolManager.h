@@ -15,7 +15,8 @@ class THESEVENTHBULLET_API UProjectilePoolManager : public UWorldSubsystem
 	GENERATED_BODY()
 
 public: 
-	virtual void Initialize(FSubsystemCollectionBase&);
+	virtual void Initialize(FSubsystemCollectionBase&) override;
+	virtual void Deinitialize() override;
 	
 	TObjectPtr<AActor> GetProjectile();
 	
