@@ -16,27 +16,19 @@ ADamageNumberActor::ADamageNumberActor()
 
 void ADamageNumberActor::Init(float Damage, bool bIsCrit)
 {
-	// [T0.4] DamageWidgetClass 미설정 또는 위젯 생성 실패 시 명시적 경고 로그
+	PendingDamage = Damage;
+	bPendingIsCrit = bIsCrit;
+
 	if (!DamageWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[DamageNumberActor] DamageWidgetClass가 블루프린트에서 설정되지 않았습니다 — 데미지 숫자 위젯을 생성할 수 없습니다."));
-	}
-	else
-	{
-		WidgetComp->SetWidgetClass(DamageWidgetClass);
-		WidgetComp->InitWidget();
+		UE_LOG(LogTemp, Error, TEXT("[DamageNumberActor] DamageWidgetClass가 블루프린트에서 설정되지 않았습니다. (Owner: %s)"), *GetName());
+		return;
 	}
 
-	UDamageNumberWidget* DamageWidget = Cast<UDamageNumberWidget>(WidgetComp->GetWidget());
-	if (DamageWidget)
-	{
-		DamageWidget->SetDamageInfo(Damage, bIsCrit);
-	}
-	else
-	{
-		// [T0.4] InitWidget() 이후 위젯이 null인 경우 — PlayerController 미연결 또는 클래스 불일치 가능
-		UE_LOG(LogTemp, Warning, TEXT("[DamageNumberActor] WidgetComponent에서 DamageNumberWidget을 가져오지 못했습니다 — 데미지 숫자가 표시되지 않습니다. (InitWidget 타이밍 문제 의심, Phase 2에서 1프레임 지연 재시도로 해소 예정)"));
-	}
+	WidgetComp->SetWidgetClass(DamageWidgetClass);
+	WidgetComp->InitWidget();
+
+	TryApplyWidget();
 
 	if (bIsCrit)
 	{
@@ -46,21 +38,52 @@ void ADamageNumberActor::Init(float Damage, bool bIsCrit)
 	SetLifeSpan(LifeDuration);
 }
 
+void ADamageNumberActor::TryApplyWidget()
+{
+	UDamageNumberWidget* Widget = Cast<UDamageNumberWidget>(WidgetComp->GetWidget());
+	if (Widget)
+	{
+		CachedWidget = Widget;
+		bWidgetReady = true;
+		Widget->SetDamageInfo(PendingDamage, bPendingIsCrit);
+		return;
+	}
+
+	// PlayerController 미연결 등으로 InitWidget 직후 위젯이 null인 경우 1프레임 지연 재시도
+	TWeakObjectPtr<ADamageNumberActor> WeakThis(this);
+	GetWorld()->GetTimerManager().SetTimerForNextTick([WeakThis]()
+	{
+		ADamageNumberActor* Self = WeakThis.Get();
+		if (!Self) return;
+
+		UDamageNumberWidget* RetryWidget = Cast<UDamageNumberWidget>(Self->WidgetComp->GetWidget());
+		if (RetryWidget)
+		{
+			Self->CachedWidget = RetryWidget;
+			Self->bWidgetReady = true;
+			RetryWidget->SetDamageInfo(Self->PendingDamage, Self->bPendingIsCrit);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("[DamageNumberActor] 1프레임 지연 후에도 DamageNumberWidget을 가져오지 못했습니다. Actor를 제거합니다. (Owner: %s)"), *Self->GetName());
+			Self->Destroy();
+		}
+	});
+}
+
 void ADamageNumberActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
 	ElapsedTime += DeltaTime;
 
-	// Float upward
 	FVector Location = GetActorLocation();
 	Location.Z += FloatSpeed * DeltaTime;
 	SetActorLocation(Location);
 
-	// Fade out
-	float Alpha = FMath::Clamp(1.0f - (ElapsedTime / LifeDuration), 0.0f, 1.0f);
-	if (UDamageNumberWidget* DamageWidget = Cast<UDamageNumberWidget>(WidgetComp->GetWidget()))
+	if (bWidgetReady && CachedWidget.IsValid())
 	{
-		DamageWidget->SetRenderOpacity(Alpha);
+		float Alpha = FMath::Clamp(1.0f - (ElapsedTime / LifeDuration), 0.0f, 1.0f);
+		CachedWidget->SetRenderOpacity(Alpha);
 	}
 }

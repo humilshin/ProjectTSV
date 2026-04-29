@@ -18,6 +18,7 @@ class UProgressBar;
 class UTextBlock;
 class UOverlay;
 class UItemDropNotifyWidget;
+class AMainCharacter;
 
 UCLASS()
 class THESEVENTHBULLET_API UMainHUDWidget : public UUserWidget
@@ -98,6 +99,7 @@ private:
 	UFUNCTION()
 	void OnSkillCooldownStartedHandler(float CoolTime);
 
+	void BindToCharacter(AMainCharacter* Character);
 	void ShowNextNotify();
 	void OnCurrentNotifyHideFinished();
 

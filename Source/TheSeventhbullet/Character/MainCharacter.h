@@ -26,6 +26,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnStaminaChanged, float, CurrentSt
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPotionChanged, int32, Count);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPotionCooldownStarted, float, CoolTime);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillCooldownStarted, float, CoolTime);
+DECLARE_MULTICAST_DELEGATE(FOnCharacterReady);
 
 UENUM(BlueprintType)
 enum class EAnimState : uint8
@@ -274,6 +275,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Potion")
 	FOnPotionCooldownStarted OnPotionCooldownStarted;
 
+	FOnCharacterReady OnCharacterReady;
+	bool IsCharacterReady() const { return bIsCharacterReady; }
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Potion")
 	float PotionCoolTime = 5.f;
 
@@ -315,6 +319,7 @@ protected:
 private:
 	float CurrentHP = 0.f;
 	float CurrentStamina = 0.f;
+	bool bIsCharacterReady = false;
 
 	// 스태미나 회복 딜레이 타이머
 	FTimerHandle StaminaRegenTimerHandle;

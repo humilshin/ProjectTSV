@@ -37,7 +37,7 @@ void UCombatComponent::BeginPlay()
 	DamageModifiersPipeline.Add(NewObject<UWeaponDamageModifier>(this));
 	GM = AMainGameMode::Get(this);
 
-	// [T0.4] DamageNumberActorClass 미설정 시 명시적 오류 로그 — 발사 시 데미지 숫자가 나타나지 않는 원인 추적용
+	ensureAlwaysMsgf(DamageNumberActorClass != nullptr, TEXT("[CombatComponent] DamageNumberActorClass가 블루프린트에서 설정되지 않았습니다. (Owner: %s)"), *GetOwner()->GetName());
 	if (!DamageNumberActorClass)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[CombatComponent] DamageNumberActorClass가 블루프린트에서 설정되지 않았습니다. 데미지 숫자가 표시되지 않습니다. (Owner: %s)"), *GetOwner()->GetName());
@@ -314,7 +314,10 @@ void UCombatComponent::ApplyDamageByHit(const FHitResult& Hit)
 	}
 	
 	UE_LOG(LogTemp, Warning, TEXT("Damage : %f"), Context.CurrentDamage);
-	
+
+	AEnemyBase* Enemy = Cast<AEnemyBase>(Context.Target);
+	const bool bWasAlreadyDead = Enemy ? Enemy->IsDead() : false;
+
 	UGameplayStatics::ApplyPointDamage(
 		Context.Target,
 		Context.CurrentDamage,
@@ -327,9 +330,7 @@ void UCombatComponent::ApplyDamageByHit(const FHitResult& Hit)
 
 	if (DamageNumberActorClass)
 	{
-		AEnemyBase* Enemy = Cast<AEnemyBase>(Context.Target);
-		if (Enemy && Enemy->IsDead()) { /* 이미 죽은 적은 데미지 표시 안 함 */ }
-		else
+		if (!bWasAlreadyDead)
 		{
 			float DisplayDamage = Context.CurrentDamage;
 			bool bIsHeadShot = (Hit.BoneName == TEXT("head"));

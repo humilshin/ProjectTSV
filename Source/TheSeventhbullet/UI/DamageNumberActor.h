@@ -30,4 +30,12 @@ private:
 	float ElapsedTime = 0.f;
 	float LifeDuration = 1.0f;
 	float FloatSpeed = 50.f;
+
+	TWeakObjectPtr<UDamageNumberWidget> CachedWidget;
+	bool bWidgetReady = false;
+
+	float PendingDamage = 0.f;
+	bool bPendingIsCrit = false;
+
+	void TryApplyWidget();
 };

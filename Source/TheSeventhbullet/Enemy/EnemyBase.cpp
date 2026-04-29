@@ -44,7 +44,7 @@ AEnemyBase::AEnemyBase()
 void AEnemyBase::BeginPlay()
 {
 	Super::BeginPlay();
-	AEnemyBase::OnTakePointDamage.AddDynamic(this, &AEnemyBase::EnemyTakePointDamage);
+	OnTakePointDamage.AddDynamic(this, &AEnemyBase::EnemyTakePointDamage);
 	Tags.Add(FName("Enemy"));
 }
 

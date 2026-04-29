@@ -127,6 +127,9 @@ void AMainCharacter::BeginPlay()
 	{
 		SM->Register(TScriptInterface<ISaveableComponent>(this));
 	}
+
+	bIsCharacterReady = true;
+	OnCharacterReady.Broadcast();
 }
 
 void AMainCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
